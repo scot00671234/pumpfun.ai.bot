@@ -279,17 +279,26 @@ class PumpFunChatApp {
             
             console.log(`Speaking: "${response}"`);
             
-            // Use the 'say' library for text-to-speech
-            say.speak(response, null, 1.0, (err) => {
-                if (err) {
-                    console.error('TTS Error:', err);
-                } else {
-                    console.log('Finished speaking response');
-                }
-                
+            // Try to use text-to-speech, but don't crash if it fails
+            try {
+                say.speak(response, null, 1.0, (err) => {
+                    if (err) {
+                        console.error('TTS Error (non-fatal):', err.message || err);
+                        console.log('Continuing without speech synthesis...');
+                    } else {
+                        console.log('Finished speaking response');
+                    }
+                    
+                    this.currentlySpeaking = false;
+                    resolve();
+                });
+            } catch (error) {
+                // If TTS completely fails to initialize, continue without it
+                console.error('TTS initialization failed (non-fatal):', error.message || error);
+                console.log('Speech synthesis unavailable, continuing with text responses only...');
                 this.currentlySpeaking = false;
                 resolve();
-            });
+            }
             
             // Also trigger avatar animation via WebSocket (if connected)
             this.triggerAvatarAnimation(response);
