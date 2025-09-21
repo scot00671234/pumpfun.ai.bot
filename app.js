@@ -2,7 +2,6 @@ const express = require('express');
 const WebSocket = require('ws');
 const { spawn } = require('child_process');
 const path = require('path');
-const say = require('say');
 const { pipeline } = require('@xenova/transformers');
 
 class PumpFunChatApp {
@@ -16,8 +15,7 @@ class PumpFunChatApp {
         this.tokenAddress = null;
         this.mcpProcess = null;
         this.textGenerator = null;
-        this.currentlySpeaking = false;
-        this.ttsDisabled = false; // Track if TTS should be disabled due to system issues
+        this.responseQueue = []; // Queue for responses to send to frontend
         
         this.setupExpress();
     }
@@ -52,14 +50,24 @@ class PumpFunChatApp {
             res.json({ status: 'started', message: `AI Avatar ready! Monitoring Pump.fun chat...` });
         });
         
-        // API endpoint to get queue status
+        // API endpoint to get queue status (kept for backward compatibility)
         this.app.get('/status', (req, res) => {
             res.json({
                 queueLength: this.commentQueue.length,
                 isProcessing: this.isProcessing,
-                currentlySpeaking: this.currentlySpeaking,
-                processedCount: this.processedComments.size
+                processedCount: this.processedComments.size,
+                responseQueueLength: this.responseQueue.length
             });
+        });
+        
+        // API endpoint to get AI responses for frontend TTS
+        this.app.get('/get-response', (req, res) => {
+            if (this.responseQueue.length > 0) {
+                const response = this.responseQueue.shift(); // Get and remove first response
+                res.json({ response });
+            } else {
+                res.json({ response: null });
+            }
         });
     }
 
@@ -275,54 +283,16 @@ class PumpFunChatApp {
     }
 
     async speakResponse(response, originalComment) {
-        return new Promise((resolve) => {
-            this.currentlySpeaking = true;
-            
-            console.log(`Speaking: "${response}"`);
-            
-            // Check if TTS is disabled due to previous failures
-            if (this.ttsDisabled) {
-                console.log('TTS disabled, continuing with text responses only...');
-                this.currentlySpeaking = false;
-                resolve();
-                this.triggerAvatarAnimation(response);
-                return;
-            }
-            
-            // Try to use text-to-speech, but don't crash if it fails
-            try {
-                const timeoutId = setTimeout(() => {
-                    console.log('TTS timeout, continuing without speech synthesis...');
-                    this.ttsDisabled = true;
-                    this.currentlySpeaking = false;
-                    resolve();
-                }, 5000); // 5 second timeout
-                
-                say.speak(response, null, 1.0, (err) => {
-                    clearTimeout(timeoutId);
-                    if (err) {
-                        console.error('TTS Error (non-fatal):', err.message || err);
-                        console.log('Disabling TTS and continuing without speech synthesis...');
-                        this.ttsDisabled = true;
-                    } else {
-                        console.log('Finished speaking response');
-                    }
-                    
-                    this.currentlySpeaking = false;
-                    resolve();
-                });
-            } catch (error) {
-                // If TTS completely fails to initialize, continue without it
-                console.error('TTS initialization failed (non-fatal):', error.message || error);
-                console.log('Disabling TTS - speech synthesis unavailable, continuing with text responses only...');
-                this.ttsDisabled = true;
-                this.currentlySpeaking = false;
-                resolve();
-            }
-            
-            // Also trigger avatar animation via WebSocket (if connected)
-            this.triggerAvatarAnimation(response);
-        });
+        console.log(`AI Response Generated: "${response}"`);
+        
+        // Queue the response for frontend TTS instead of handling it server-side
+        this.responseQueue.push(response);
+        console.log(`Response queued for frontend TTS. Queue length: ${this.responseQueue.length}`);
+        
+        // Also trigger avatar animation via WebSocket (if connected) - for future WebSocket implementation
+        this.triggerAvatarAnimation(response);
+        
+        return Promise.resolve();
     }
 
     triggerAvatarAnimation(text) {

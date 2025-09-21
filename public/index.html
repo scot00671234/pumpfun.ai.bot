@@ -305,6 +305,35 @@
             font-weight: bold;
             text-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
         }
+        
+        .subtitle-overlay {
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            max-width: 80%;
+            background: rgba(0, 0, 0, 0.85);
+            color: #00ffff;
+            padding: 15px 25px;
+            border-radius: 15px;
+            border: 2px solid rgba(0, 255, 255, 0.4);
+            font-size: 1.1em;
+            font-weight: 600;
+            text-align: center;
+            box-shadow: 
+                0 0 20px rgba(0, 255, 255, 0.3),
+                0 0 40px rgba(0, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            word-wrap: break-word;
+            line-height: 1.4;
+        }
+        
+        .subtitle-overlay.visible {
+            opacity: 1;
+        }
     </style>
 </head>
 <body>
@@ -334,9 +363,160 @@
 
         <div id="logs" class="logs"></div>
     </div>
+    
+    <!-- Dynamic subtitle overlay -->
+    <div id="subtitle" class="subtitle-overlay"></div>
 
     <script>
         let isRunning = false;
+        let speechSynthesis = window.speechSynthesis;
+        let currentUtterance = null;
+        let responseQueue = []; // Client-side queue for TTS responses
+        let isProcessingSpeech = false;
+
+        // Initialize TTS functionality
+        function initializeTTS() {
+            if (!('speechSynthesis' in window)) {
+                logMessage('❌ Text-to-speech not supported in this browser');
+                return false;
+            }
+            logMessage('✅ Text-to-speech initialized');
+            return true;
+        }
+
+        // Add response to queue and process if not already speaking
+        function queueSpeech(text) {
+            responseQueue.push(text);
+            if (!isProcessingSpeech) {
+                processNextSpeech();
+            }
+        }
+        
+        // Process the next speech in queue
+        function processNextSpeech() {
+            if (responseQueue.length === 0 || isProcessingSpeech) {
+                return;
+            }
+            
+            isProcessingSpeech = true;
+            const text = responseQueue.shift();
+            speakText(text);
+        }
+
+        // Speak text using Web Speech API
+        function speakText(text) {
+            if (!speechSynthesis) {
+                isProcessingSpeech = false;
+                return;
+            }
+
+            currentUtterance = new SpeechSynthesisUtterance(text);
+            
+            // Configure voice settings
+            currentUtterance.rate = 0.9;
+            currentUtterance.pitch = 1.1;
+            currentUtterance.volume = 0.8;
+
+            // Try to use a female voice if available (wait for voices to load)
+            function setVoice() {
+                const voices = speechSynthesis.getVoices();
+                const femaleVoice = voices.find(voice => 
+                    voice.name.toLowerCase().includes('female') || 
+                    voice.name.toLowerCase().includes('woman') ||
+                    voice.name.toLowerCase().includes('samantha') ||
+                    voice.name.toLowerCase().includes('karen') ||
+                    voice.name.toLowerCase().includes('victoria')
+                );
+                if (femaleVoice) {
+                    currentUtterance.voice = femaleVoice;
+                }
+            }
+            
+            // Handle voice loading
+            if (speechSynthesis.getVoices().length === 0) {
+                speechSynthesis.onvoiceschanged = setVoice;
+            } else {
+                setVoice();
+            }
+
+            // Avatar animation events
+            currentUtterance.onstart = function() {
+                const avatar = document.getElementById('avatar');
+                const mouth = document.getElementById('mouth');
+                avatar.classList.add('speaking');
+                mouth.classList.add('talking');
+                logMessage('🗣️ AI is speaking: ' + text.substring(0, 50) + '...');
+                showSubtitle(text);
+            };
+
+            currentUtterance.onend = function() {
+                const avatar = document.getElementById('avatar');
+                const mouth = document.getElementById('mouth');
+                avatar.classList.remove('speaking');
+                mouth.classList.remove('talking');
+                hideSubtitle();
+                currentUtterance = null;
+                isProcessingSpeech = false;
+                
+                // Process next speech in queue
+                setTimeout(() => processNextSpeech(), 200);
+            };
+
+            currentUtterance.onerror = function(event) {
+                logMessage('❌ TTS Error: ' + event.error);
+                hideSubtitle();
+                currentUtterance = null;
+                isProcessingSpeech = false;
+                
+                // Process next speech in queue even after error
+                setTimeout(() => processNextSpeech(), 500);
+            };
+
+            speechSynthesis.speak(currentUtterance);
+        }
+        
+        // Subtitle functionality
+        function showSubtitle(text) {
+            const subtitle = document.getElementById('subtitle');
+            subtitle.textContent = text;
+            subtitle.classList.add('visible');
+        }
+        
+        function hideSubtitle() {
+            const subtitle = document.getElementById('subtitle');
+            subtitle.classList.remove('visible');
+        }
+        
+        // Listen for AI responses from the backend
+        function startListeningForResponses() {
+            // Use a smarter polling approach - only check when idle
+            async function checkForResponses() {
+                if (!isRunning) {
+                    setTimeout(checkForResponses, 2000);
+                    return;
+                }
+                
+                try {
+                    const response = await fetch('/get-response');
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.response) {
+                            logMessage(`💬 AI Response: ${data.response}`);
+                            queueSpeech(data.response);
+                        }
+                    }
+                } catch (error) {
+                    // Silently handle errors to avoid spam
+                }
+                
+                // Check again after a delay - longer if currently speaking
+                const delay = isProcessingSpeech ? 2000 : 800;
+                setTimeout(checkForResponses, delay);
+            }
+            
+            // Start the polling loop
+            checkForResponses();
+        }
 
         async function startBot() {
             const tokenAddress = document.getElementById('tokenAddress').value.trim();
@@ -364,6 +544,8 @@
                     document.getElementById('greeting').classList.remove('hidden');
                     
                     isRunning = true;
+                    initializeTTS();
+                    startListeningForResponses();
                     logMessage(`🚀 AI Avatar started monitoring token ${tokenAddress}`);
                 } else {
                     alert('Error: ' + result.error);
