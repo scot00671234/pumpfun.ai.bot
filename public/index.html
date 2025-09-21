@@ -208,9 +208,8 @@
         <h1>🎤 Pump.fun Chat Response Bot</h1>
         
         <div id="setupForm" class="setup-form">
-            <input type="text" id="username" placeholder="Enter your username" required>
             <input type="text" id="tokenAddress" placeholder="Enter Pump.fun token address" required>
-            <button onclick="startBot()">Start Bot</button>
+            <button onclick="startBot()">Start AI Avatar</button>
         </div>
 
         <div id="greeting" class="greeting hidden"></div>
@@ -254,11 +253,11 @@
         let statusInterval;
 
         async function startBot() {
-            const username = document.getElementById('username').value.trim();
             const tokenAddress = document.getElementById('tokenAddress').value.trim();
+            const username = 'AI Avatar'; // Automatically set username
 
-            if (!username || !tokenAddress) {
-                alert('Please enter both username and token address');
+            if (!tokenAddress) {
+                alert('Please enter token address');
                 return;
             }
 
@@ -280,7 +279,7 @@
                     
                     isRunning = true;
                     startStatusUpdates();
-                    logMessage(`🚀 Bot started for ${username} monitoring token ${tokenAddress}`);
+                    logMessage(`🚀 AI Avatar started monitoring token ${tokenAddress}`);
                 } else {
                     alert('Error: ' + result.error);
                 }
@@ -340,8 +339,8 @@
         }
 
         // Initialize
-        logMessage('🎤 Pump.fun Chat Response Bot initialized');
-        logMessage('📝 Enter your details to start monitoring chat');
+        logMessage('🎤 Pump.fun AI Avatar initialized');
+        logMessage('📝 Enter token address to start responding to chat');
     </script>
 </body>
 </html>

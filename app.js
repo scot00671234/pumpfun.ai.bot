@@ -37,9 +37,9 @@ class PumpFunChatApp {
         
         // API endpoint to start chat monitoring
         this.app.post('/start', (req, res) => {
-            const { username, tokenAddress } = req.body;
-            if (!username || !tokenAddress) {
-                return res.status(400).json({ error: 'Username and token address required' });
+            const { username = 'AI Avatar', tokenAddress } = req.body;
+            if (!tokenAddress) {
+                return res.status(400).json({ error: 'Token address required' });
             }
             
             this.username = username;
@@ -48,7 +48,7 @@ class PumpFunChatApp {
             console.log(`Starting chat monitoring for user: ${username}, token: ${tokenAddress}`);
             this.startPumpFunChat();
             
-            res.json({ status: 'started', message: `Hi ${username}! Starting to monitor Pump.fun chat...` });
+            res.json({ status: 'started', message: `AI Avatar ready! Monitoring Pump.fun chat...` });
         });
         
         // API endpoint to get queue status
@@ -82,9 +82,13 @@ class PumpFunChatApp {
 
         console.log(`Starting pump-fun-chat-mcp for token: ${this.tokenAddress}`);
         
-        // Start the MCP server process
-        this.mcpProcess = spawn('npx', ['pump-fun-chat-mcp', this.tokenAddress], {
-            stdio: ['pipe', 'pipe', 'pipe']
+        // Start the MCP server process with PUMP_FUN_TOKEN environment variable
+        this.mcpProcess = spawn('npx', ['pump-fun-chat-mcp'], {
+            stdio: ['pipe', 'pipe', 'pipe'],
+            env: {
+                ...process.env,
+                PUMP_FUN_TOKEN: this.tokenAddress
+            }
         });
 
         this.mcpProcess.stdout.on('data', (data) => {
@@ -116,27 +120,24 @@ class PumpFunChatApp {
 
     parseAndQueueComments(mcpOutput) {
         try {
-            // Parse MCP output to extract chat messages
-            // This is a simplified parser - real implementation would depend on MCP format
             const lines = mcpOutput.split('\n');
             
             lines.forEach(line => {
-                if (line.includes('message:') || line.includes('chat:')) {
-                    // Extract username and message from the line
-                    const messageMatch = line.match(/(\w+):\s*(.+)/);
-                    if (messageMatch) {
-                        const [, user, message] = messageMatch;
-                        const commentId = `${user}_${message}_${Date.now()}`;
-                        
-                        // Check for duplicates
-                        if (!this.processedComments.has(commentId)) {
-                            this.commentQueue.push({
-                                id: commentId,
-                                user: user,
-                                message: message.trim(),
-                                timestamp: Date.now()
-                            });
-                            console.log(`Queued comment from ${user}: ${message.trim()}`);
+                if (line.trim() === '') return;
+                
+                try {
+                    // Try to parse as JSON first (structured output from pump-fun-chat-mcp)
+                    const data = JSON.parse(line);
+                    if (data.type === 'message' && data.user && data.text) {
+                        this.queueComment(data.user, data.text, data.id || null);
+                    }
+                } catch (e) {
+                    // Fallback to regex parsing for plain text
+                    if (line.includes('message:') || line.includes('chat:') || line.includes(':')) {
+                        const messageMatch = line.match(/(\w+):\s*(.+)/);
+                        if (messageMatch) {
+                            const [, user, message] = messageMatch;
+                            this.queueComment(user, message.trim());
                         }
                     }
                 }
@@ -144,6 +145,28 @@ class PumpFunChatApp {
         } catch (error) {
             console.error('Error parsing MCP output:', error);
         }
+    }
+    
+    queueComment(user, message, providedId = null) {
+        // Create stable ID for better duplicate detection using content hash
+        const crypto = require('crypto');
+        const contentHash = crypto.createHash('md5').update(`${user}:${message}`).digest('hex').substring(0, 8);
+        const commentId = providedId || `${user}_${contentHash}`;
+        
+        // Skip if already processed (true duplicate detection)
+        if (this.processedComments.has(commentId)) {
+            return;
+        }
+        
+        // Add to queue
+        this.commentQueue.push({
+            id: commentId,
+            user: user,
+            message: message,
+            timestamp: Date.now()
+        });
+        
+        console.log(`Queued comment from ${user}: ${message}`);
     }
 
     startQueueProcessor() {
