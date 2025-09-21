@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pump.fun Chat Response Bot</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            max-width: 800px;
+            width: 100%;
+            text-align: center;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .setup-form {
+            margin-bottom: 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        input {
+            padding: 15px;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus {
+            border-color: #667eea;
+            outline: none;
+        }
+
+        button {
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .avatar-container {
+            margin: 30px 0;
+            display: flex;
+            justify-content: center;
+        }
+
+        .avatar {
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            transition: transform 0.3s ease;
+        }
+
+        .avatar.speaking {
+            transform: scale(1.05);
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1.05); }
+            50% { transform: scale(1.1); }
+        }
+
+        .face {
+            width: 150px;
+            height: 150px;
+            position: relative;
+        }
+
+        .eyes {
+            position: absolute;
+            top: 40px;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 20px;
+        }
+
+        .eye {
+            width: 20px;
+            height: 20px;
+            background: #333;
+            border-radius: 50%;
+            animation: blink 3s infinite;
+        }
+
+        @keyframes blink {
+            0%, 90%, 100% { height: 20px; }
+            95% { height: 2px; }
+        }
+
+        .mouth {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 40px;
+            height: 20px;
+            background: #333;
+            border-radius: 0 0 40px 40px;
+            transition: all 0.2s ease;
+        }
+
+        .mouth.talking {
+            animation: talk 0.3s infinite alternate;
+        }
+
+        @keyframes talk {
+            0% { 
+                height: 20px;
+                border-radius: 0 0 40px 40px;
+            }
+            100% { 
+                height: 30px;
+                border-radius: 40px;
+            }
+        }
+
+        .status {
+            margin-top: 30px;
+            padding: 20px;
+            background: rgba(102, 126, 234, 0.1);
+            border-radius: 10px;
+            border-left: 5px solid #667eea;
+        }
+
+        .status-item {
+            margin: 10px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .status-value {
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .logs {
+            margin-top: 20px;
+            text-align: left;
+            background: #1a1a1a;
+            color: #00ff00;
+            padding: 20px;
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .greeting {
+            font-size: 1.2em;
+            color: #667eea;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎤 Pump.fun Chat Response Bot</h1>
+        
+        <div id="setupForm" class="setup-form">
+            <input type="text" id="username" placeholder="Enter your username" required>
+            <input type="text" id="tokenAddress" placeholder="Enter Pump.fun token address" required>
+            <button onclick="startBot()">Start Bot</button>
+        </div>
+
+        <div id="greeting" class="greeting hidden"></div>
+
+        <div class="avatar-container">
+            <div class="avatar" id="avatar">
+                <div class="face">
+                    <div class="eyes">
+                        <div class="eye"></div>
+                        <div class="eye"></div>
+                    </div>
+                    <div class="mouth" id="mouth"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="status" class="status">
+            <div class="status-item">
+                <span>Queue Length:</span>
+                <span class="status-value" id="queueLength">0</span>
+            </div>
+            <div class="status-item">
+                <span>Processing:</span>
+                <span class="status-value" id="isProcessing">No</span>
+            </div>
+            <div class="status-item">
+                <span>Speaking:</span>
+                <span class="status-value" id="currentlySpeaking">No</span>
+            </div>
+            <div class="status-item">
+                <span>Processed Comments:</span>
+                <span class="status-value" id="processedCount">0</span>
+            </div>
+        </div>
+
+        <div id="logs" class="logs"></div>
+    </div>
+
+    <script>
+        let isRunning = false;
+        let statusInterval;
+
+        async function startBot() {
+            const username = document.getElementById('username').value.trim();
+            const tokenAddress = document.getElementById('tokenAddress').value.trim();
+
+            if (!username || !tokenAddress) {
+                alert('Please enter both username and token address');
+                return;
+            }
+
+            try {
+                const response = await fetch('/start', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ username, tokenAddress })
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    document.getElementById('setupForm').classList.add('hidden');
+                    document.getElementById('greeting').textContent = result.message;
+                    document.getElementById('greeting').classList.remove('hidden');
+                    
+                    isRunning = true;
+                    startStatusUpdates();
+                    logMessage(`🚀 Bot started for ${username} monitoring token ${tokenAddress}`);
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (error) {
+                alert('Connection error: ' + error.message);
+                logMessage('❌ Connection error: ' + error.message);
+            }
+        }
+
+        function startStatusUpdates() {
+            statusInterval = setInterval(updateStatus, 1000);
+        }
+
+        async function updateStatus() {
+            if (!isRunning) return;
+
+            try {
+                const response = await fetch('/status');
+                const status = await response.json();
+
+                document.getElementById('queueLength').textContent = status.queueLength;
+                document.getElementById('isProcessing').textContent = status.isProcessing ? 'Yes' : 'No';
+                document.getElementById('currentlySpeaking').textContent = status.currentlySpeaking ? 'Yes' : 'No';
+                document.getElementById('processedCount').textContent = status.processedCount;
+
+                // Update avatar animation based on speaking status
+                const avatar = document.getElementById('avatar');
+                const mouth = document.getElementById('mouth');
+                
+                if (status.currentlySpeaking) {
+                    avatar.classList.add('speaking');
+                    mouth.classList.add('talking');
+                } else {
+                    avatar.classList.remove('speaking');
+                    mouth.classList.remove('talking');
+                }
+
+                // Log activity
+                if (status.isProcessing) {
+                    logMessage('🔄 Processing comment...');
+                }
+                
+                if (status.currentlySpeaking) {
+                    logMessage('🗣️ AI is speaking...');
+                }
+
+            } catch (error) {
+                logMessage('❌ Status update error: ' + error.message);
+            }
+        }
+
+        function logMessage(message) {
+            const logs = document.getElementById('logs');
+            const timestamp = new Date().toLocaleTimeString();
+            logs.innerHTML += `[${timestamp}] ${message}\n`;
+            logs.scrollTop = logs.scrollHeight;
+        }
+
+        // Initialize
+        logMessage('🎤 Pump.fun Chat Response Bot initialized');
+        logMessage('📝 Enter your details to start monitoring chat');
+    </script>
+</body>
+</html>
