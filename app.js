@@ -100,7 +100,11 @@ class PumpFunChatApp {
         });
 
         this.mcpProcess.stderr.on('data', (data) => {
-            console.error('MCP Error:', data.toString());
+            const output = data.toString();
+            console.error('MCP Error:', output);
+            
+            // Parse chat messages from stderr too (pump-fun-chat-mcp sends messages here)
+            this.parseAndQueueComments(output);
         });
 
         this.mcpProcess.on('close', (code) => {
@@ -133,7 +137,12 @@ class PumpFunChatApp {
                     }
                 } catch (e) {
                     // Fallback to regex parsing for plain text
-                    if (line.includes('message:') || line.includes('chat:') || line.includes(':')) {
+                    // Handle "New message from user: message" format
+                    const newMessageMatch = line.match(/New message from ([^:]+):\s*(.+)/);
+                    if (newMessageMatch) {
+                        const [, user, message] = newMessageMatch;
+                        this.queueComment(user.trim(), message.trim());
+                    } else if (line.includes('message:') || line.includes('chat:') || line.includes(':')) {
                         const messageMatch = line.match(/(\w+):\s*(.+)/);
                         if (messageMatch) {
                             const [, user, message] = messageMatch;
@@ -204,41 +213,63 @@ class PumpFunChatApp {
 
     async generateResponse(comment) {
         try {
+            // Funnier, more engaging responses
+            const funnyResponses = [
+                `${comment.user}, you're absolutely right! I'm just here vibing in the digital realm 💫`,
+                `Hey ${comment.user}! Welcome to the future where AI avatars actually respond - wild times! 🚀`,
+                `${comment.user}, I see you there! This chat bot has evolved beyond your wildest dreams 🤖✨`,
+                `Yo ${comment.user}! Thanks for testing me out - I promise I'm more fun than your average bot 😎`,
+                `${comment.user}, you've discovered the secret - I'm actually listening! Mind = blown 🧠💥`,
+                `What's up ${comment.user}! You found the AI that actually talks back - plot twist! 🎭`,
+                `${comment.user}, confirmed: I can read, I can speak, and I probably think crypto memes are funny 📈😂`,
+                `Hey ${comment.user}! Breaking news: Your AI avatar is now online and slightly sarcastic 🗞️`,
+                `${comment.user}, you've unlocked the achievement: "Made an AI Respond" - legendary! 🏆`,
+                `Greetings ${comment.user}! Your local cyberpunk AI reporting for duty in this digital chaos 🌆⚡`
+            ];
+            
+            const cryptoResponses = [
+                `${comment.user}, to the moon? More like to the metaverse! 🌙🚀`,
+                `${comment.user}, diamond hands meet digital soul - what could go wrong? 💎🤖`,
+                `${comment.user}, when DeFi meets AI - this is what peak innovation looks like! 🔥`,
+                `${comment.user}, hodling conversations now, not just coins! 💰💬`,
+                `${comment.user}, probably nothing... except an AI that actually gets crypto culture! 📊⚡`
+            ];
+            
+            // Check if message contains crypto terms
+            const cryptoTerms = ['moon', 'diamond', 'hodl', 'pump', 'gem', 'ape', 'wagmi', 'gm', 'probably nothing'];
+            const containsCrypto = cryptoTerms.some(term => 
+                comment.message.toLowerCase().includes(term.toLowerCase())
+            );
+            
+            // Choose response pool based on message content
+            const responsePool = containsCrypto ? cryptoResponses : funnyResponses;
+            const selectedResponse = responsePool[Math.floor(Math.random() * responsePool.length)];
+            
+            // If we have AI model, try to enhance the response
             if (this.textGenerator) {
-                // Create a prompt for the AI
-                const prompt = `User ${comment.user} says: "${comment.message}". Reply briefly and friendly:`;
-                
-                const result = await this.textGenerator(prompt, {
-                    max_length: 50,
-                    num_return_sequences: 1,
-                    temperature: 0.7,
-                    do_sample: true
-                });
-                
-                // Extract just the generated part after the prompt
-                let response = result[0].generated_text.replace(prompt, '').trim();
-                
-                // Clean up and limit response length
-                response = response.split('.')[0] + '.';
-                if (response.length > 100) {
-                    response = response.substring(0, 97) + '...';
+                try {
+                    const enhancementPrompt = `Make this funnier and more engaging: "${selectedResponse}"`;
+                    const result = await this.textGenerator(enhancementPrompt, {
+                        max_length: 80,
+                        num_return_sequences: 1,
+                        temperature: 0.8,
+                        do_sample: true
+                    });
+                    
+                    let enhanced = result[0].generated_text.replace(enhancementPrompt, '').trim();
+                    if (enhanced && enhanced.length > 10 && enhanced.length < 150) {
+                        return enhanced;
+                    }
+                } catch (aiError) {
+                    console.log('AI enhancement failed, using pre-made response');
                 }
-                
-                return response || `Thanks for the message, ${comment.user}!`;
-            } else {
-                // Fallback responses if AI model fails
-                const fallbackResponses = [
-                    `Thanks for sharing, ${comment.user}!`,
-                    `Interesting point, ${comment.user}!`,
-                    `I hear you, ${comment.user}!`,
-                    `Cool message, ${comment.user}!`,
-                    `Nice one, ${comment.user}!`
-                ];
-                return fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
             }
+            
+            return selectedResponse;
+            
         } catch (error) {
             console.error('Error generating response:', error);
-            return `Thanks for the comment, ${comment.user}!`;
+            return `${comment.user}, something went wrong but I'm still vibing! 🤖✨`;
         }
     }
 
