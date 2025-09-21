@@ -17,6 +17,7 @@ class PumpFunChatApp {
         this.mcpProcess = null;
         this.textGenerator = null;
         this.currentlySpeaking = false;
+        this.ttsDisabled = false; // Track if TTS should be disabled due to system issues
         
         this.setupExpress();
     }
@@ -279,12 +280,30 @@ class PumpFunChatApp {
             
             console.log(`Speaking: "${response}"`);
             
+            // Check if TTS is disabled due to previous failures
+            if (this.ttsDisabled) {
+                console.log('TTS disabled, continuing with text responses only...');
+                this.currentlySpeaking = false;
+                resolve();
+                this.triggerAvatarAnimation(response);
+                return;
+            }
+            
             // Try to use text-to-speech, but don't crash if it fails
             try {
+                const timeoutId = setTimeout(() => {
+                    console.log('TTS timeout, continuing without speech synthesis...');
+                    this.ttsDisabled = true;
+                    this.currentlySpeaking = false;
+                    resolve();
+                }, 5000); // 5 second timeout
+                
                 say.speak(response, null, 1.0, (err) => {
+                    clearTimeout(timeoutId);
                     if (err) {
                         console.error('TTS Error (non-fatal):', err.message || err);
-                        console.log('Continuing without speech synthesis...');
+                        console.log('Disabling TTS and continuing without speech synthesis...');
+                        this.ttsDisabled = true;
                     } else {
                         console.log('Finished speaking response');
                     }
@@ -295,7 +314,8 @@ class PumpFunChatApp {
             } catch (error) {
                 // If TTS completely fails to initialize, continue without it
                 console.error('TTS initialization failed (non-fatal):', error.message || error);
-                console.log('Speech synthesis unavailable, continuing with text responses only...');
+                console.log('Disabling TTS - speech synthesis unavailable, continuing with text responses only...');
+                this.ttsDisabled = true;
                 this.currentlySpeaking = false;
                 resolve();
             }
@@ -331,5 +351,17 @@ async function startApp() {
 }
 
 startApp().catch(console.error);
+
+// Add process-level error handlers to prevent crashes
+process.on('uncaughtException', (error) => {
+    console.error('Uncaught Exception (non-fatal):', error.message || error);
+    console.error('Stack trace:', error.stack);
+    console.log('App continuing to run...');
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection (non-fatal):', reason);
+    console.log('App continuing to run...');
+});
 
 module.exports = PumpFunChatApp;
