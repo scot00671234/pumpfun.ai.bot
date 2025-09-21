@@ -275,31 +275,6 @@
             }
         }
 
-        .status {
-            margin-top: 30px;
-            padding: 20px;
-            background: rgba(0, 20, 40, 0.7);
-            border-radius: 10px;
-            border: 1px solid rgba(0, 255, 255, 0.3);
-            border-left: 5px solid #00ffff;
-            backdrop-filter: blur(5px);
-            box-shadow: 
-                0 5px 15px rgba(0, 255, 255, 0.1),
-                inset 0 1px 0 rgba(255, 255, 255, 0.1);
-        }
-
-        .status-item {
-            margin: 10px 0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .status-value {
-            font-weight: bold;
-            color: #00ffff;
-            text-shadow: 0 0 5px rgba(0, 255, 255, 0.3);
-        }
 
         .logs {
             margin-top: 20px;
@@ -356,31 +331,12 @@
             </div>
         </div>
 
-        <div id="status" class="status">
-            <div class="status-item">
-                <span>Queue Length:</span>
-                <span class="status-value" id="queueLength">0</span>
-            </div>
-            <div class="status-item">
-                <span>Processing:</span>
-                <span class="status-value" id="isProcessing">No</span>
-            </div>
-            <div class="status-item">
-                <span>Speaking:</span>
-                <span class="status-value" id="currentlySpeaking">No</span>
-            </div>
-            <div class="status-item">
-                <span>Processed Comments:</span>
-                <span class="status-value" id="processedCount">0</span>
-            </div>
-        </div>
 
         <div id="logs" class="logs"></div>
     </div>
 
     <script>
         let isRunning = false;
-        let statusInterval;
 
         async function startBot() {
             const tokenAddress = document.getElementById('tokenAddress').value.trim();
@@ -408,7 +364,6 @@
                     document.getElementById('greeting').classList.remove('hidden');
                     
                     isRunning = true;
-                    startStatusUpdates();
                     logMessage(`🚀 AI Avatar started monitoring token ${tokenAddress}`);
                 } else {
                     alert('Error: ' + result.error);
@@ -419,47 +374,6 @@
             }
         }
 
-        function startStatusUpdates() {
-            statusInterval = setInterval(updateStatus, 1000);
-        }
-
-        async function updateStatus() {
-            if (!isRunning) return;
-
-            try {
-                const response = await fetch('/status');
-                const status = await response.json();
-
-                document.getElementById('queueLength').textContent = status.queueLength;
-                document.getElementById('isProcessing').textContent = status.isProcessing ? 'Yes' : 'No';
-                document.getElementById('currentlySpeaking').textContent = status.currentlySpeaking ? 'Yes' : 'No';
-                document.getElementById('processedCount').textContent = status.processedCount;
-
-                // Update avatar animation based on speaking status
-                const avatar = document.getElementById('avatar');
-                const mouth = document.getElementById('mouth');
-                
-                if (status.currentlySpeaking) {
-                    avatar.classList.add('speaking');
-                    mouth.classList.add('talking');
-                } else {
-                    avatar.classList.remove('speaking');
-                    mouth.classList.remove('talking');
-                }
-
-                // Log activity
-                if (status.isProcessing) {
-                    logMessage('🔄 Processing comment...');
-                }
-                
-                if (status.currentlySpeaking) {
-                    logMessage('🗣️ AI is speaking...');
-                }
-
-            } catch (error) {
-                logMessage('❌ Status update error: ' + error.message);
-            }
-        }
 
         function logMessage(message) {
             const logs = document.getElementById('logs');
